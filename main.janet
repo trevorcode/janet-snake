@@ -12,7 +12,7 @@
 
 (var game-state @{:paused? true
                   :score 0
-		  :state :playing}) 
+                  :state :playing})
 
 (var accumulated-time 0)
 
@@ -20,7 +20,7 @@
              :tail @[[10 21] [10 22] [11 22]]
              :speed 2
              :color :green
-             :dir :right}) 
+             :dir :right})
 
 (var apple [10 10])
 
@@ -42,16 +42,16 @@
    (cond
      (> y (dec max-y)) 0
      (< y 0) (dec max-y)
-     y)]) 
+     y)])
 
 (defn randomize-apple []
   (set apple [(math/floor (* (math/random) squares-h))
-                    (math/floor (* (math/random) squares-v))])) 
+              (math/floor (* (math/random) squares-v))]))
 
 (defn update-snake-head [dir head]
   (-> (dir->vec dir)
       (add-points head)
-      (out-of-bounds-wrap squares-h squares-v))) 
+      (out-of-bounds-wrap squares-h squares-v)))
 
 (defn tick-snake [snake]
   (array/insert (get snake :tail) 0 (get snake :head))
@@ -62,14 +62,14 @@
         (randomize-apple)
         (update game-state :score inc)
         true)
-      false)) 
+      false))
 
-  (when 
+  (when
     (some (fn [tails] (= tails (get snake :head))) (get snake :tail))
-    (put game-state :state :game-over)) 
+    (put game-state :state :game-over))
 
   (when (not eat?)
-    (array/pop (get snake :tail)))) 
+    (array/pop (get snake :tail))))
 
 (defn draw-snake [snake]
   (each [x y] (get snake :tail)
@@ -83,39 +83,38 @@
                       (inc (* square-size y))
                       (dec square-size)
                       (dec square-size)
-                      [0.2 0.7 0.2]))) 
+                      [0.2 0.7 0.2])))
 
 (defn init-game []
   (set snake @{:head [10 20]
-              :tail @[[10 21] [10 22] [11 22]]
-              :speed 2
-              :color :green
-              :dir :right}) 
+               :tail @[[10 21] [10 22] [11 22]]
+               :speed 2
+               :color :green
+               :dir :right})
   (set game-state @{:paused? false
                     :score 0
-		    :state :playing})
-  (randomize-apple)) 
+                    :state :playing})
+  (randomize-apple))
 
 (defn handle-events []
   (when (and (j/key-pressed? :w)
-	     (not= :down (snake :dir)))
+             (not= :down (snake :dir)))
     (put snake :dir :up))
   (when (and (j/key-pressed? :d)
-	     (not= :left (snake :dir)))
+             (not= :left (snake :dir)))
     (put snake :dir :right))
   (when (and (j/key-pressed? :a)
-	     (not= :right (snake :dir)))
+             (not= :right (snake :dir)))
     (put snake :dir :left))
   (when (and (j/key-pressed? :s)
-	     (not= :up (snake :dir)))
+             (not= :up (snake :dir)))
     (put snake :dir :down))
 
   (when (j/key-pressed? :p)
     (update game-state :paused? not))
 
-
   (when (j/key-pressed? :space)
-    (init-game))) 
+    (init-game)))
 
 (defn update-game []
   (set accumulated-time (+ accumulated-time (j/get-frame-time)))
@@ -123,7 +122,7 @@
   (let [snake-speed (/ 1 (+ (get snake :speed) (/ (get game-state :score) 2)))]
     (when (> accumulated-time snake-speed)
       (set accumulated-time (- accumulated-time snake-speed))
-      (tick-snake snake)))) 
+      (tick-snake snake))))
 
 (defn draw-apple [apple]
   (let [[x y] apple
@@ -167,14 +166,14 @@
                (- screen-width 120)
                10 24 :green)
   (j/draw-fps 10 10)
-  (j/end-drawing)) 
+  (j/end-drawing))
 
 (defn game-loop []
   (handle-events)
   (when (and (not (game-state :paused?))
-	     (= :playing (get game-state :state)))
+             (= :playing (get game-state :state)))
     (update-game))
-  (draw)) 
+  (draw))
 
 (defn main
   [& args]
