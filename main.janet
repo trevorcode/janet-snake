@@ -36,12 +36,12 @@
 
 (defn out-of-bounds-wrap [[x y] max-x max-y]
   [(cond
-     (> x max-x) 0
-     (< x 0) max-x
+     (> x (dec max-x)) 0
+     (< x 0) (dec max-x)
      x)
    (cond
-     (> y max-y) 0
-     (< y 0) max-y
+     (> y (dec max-y)) 0
+     (< y 0) (dec max-y)
      y)]) 
 
 (defn randomize-apple []
