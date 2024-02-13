@@ -25,6 +25,7 @@
 (var apple [10 10])
 
 
+
 (defn add-points [[x1 y1] [x2 y2]]
   [(+ x1 x2) (+ y1 y2)])
 
@@ -77,13 +78,13 @@
                       (inc (* square-size y))
                       (dec square-size)
                       (dec square-size)
-                      [1 0.5 0.3]))
+                      [0.8 0 0.8]))
   (let [[x y] (get snake :head)]
     (j/draw-rectangle (inc (* square-size x))
                       (inc (* square-size y))
                       (dec square-size)
                       (dec square-size)
-                      [0.2 0.7 0.2])))
+                      [0.2 0.7 0.2]))) 
 
 (defn init-game []
   (set snake @{:head [10 20]
@@ -135,7 +136,6 @@
                       :red)))
 
 (defn draw []
-  (ev/sleep 0)
   (j/begin-drawing)
   (j/clear-background bg-color)
 
@@ -168,12 +168,29 @@
   (j/draw-fps 10 10)
   (j/end-drawing))
 
+(def event-chan (ev/chan 100)) 
+
+(defn command-handler [command]
+  (xprintf stdout (string "Hello " command))) 
+
+(defn command-listener []
+  (forever
+    (ev/sleep 0)
+    (let [command (ev/take event-chan)]
+      (command-handler command)))) 
+
 (defn game-loop []
+  (def commands @[])
   (handle-events)
   (when (and (not (game-state :paused?))
              (= :playing (get game-state :state)))
     (update-game))
   (draw))
+
+(comment 
+ (def handle-commands (ev/call command-listener)) 
+ (ev/cancel handle-commands "Canceled") 
+ (ev/give event-chan "Test3"))  
 
 (defn main
   [& args]
@@ -183,5 +200,9 @@
   (j/set-target-fps 60)
   (init-game)
   (while (not (j/window-should-close))
+    (ev/sleep 0)
     (game-loop))
   (:close repl-server))
+
+
+ 
