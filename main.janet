@@ -20,10 +20,10 @@
              :tail @[[10 21] [10 22] [11 22]]
              :speed 2
              :color :green
-             :dir :right})
+             :dir :right
+	     :next-dir :right})
 
 (var apple [10 10])
-
 
 
 (defn add-points [[x1 y1] [x2 y2]]
@@ -45,9 +45,8 @@
      (< y 0) (dec max-y)
      y)])
 
-(defn randomize-apple []
-  (set apple [(math/floor (* (math/random) squares-h))
-              (math/floor (* (math/random) squares-v))]))
+(defn randomize-apple [event-chan]
+  (ev/give event-chan {:type :respawn-apple})) 
 
 (defn update-snake-head [dir head]
   (-> (dir->vec dir)
@@ -55,22 +54,65 @@
       (out-of-bounds-wrap squares-h squares-v)))
 
 (defn tick-snake [snake]
-  (array/insert (get snake :tail) 0 (get snake :head))
-  (update snake :head (partial update-snake-head (get snake :dir)))
-  (def eat?
-    (if (= (get snake :head) apple)
-      (do
-        (randomize-apple)
-        (update game-state :score inc)
-        true)
-      false))
+  (let [next-head-pos (add-points (dir->vec (get snake :next-dir)) (get snake :head))]
 
-  (when
-    (some (fn [tails] (= tails (get snake :head))) (get snake :tail))
-    (put game-state :state :game-over))
+    (cond
+      (= next-head-pos apple)
+      {:type :snake-eat}
 
-  (when (not eat?)
-    (array/pop (get snake :tail))))
+      (some (fn [tails] (= tails next-head-pos)) (get snake :tail))
+      {:type :game-over}
+
+      {:type :move-snake}))) 
+
+ 
+
+(defn init-game! []
+  (set snake @{:head [10 20]
+               :tail @[[10 21] [10 22] [11 22]]
+               :speed 2
+               :color :green
+               :dir :right
+	       :next-dir :right})
+  (set game-state @{:paused? false
+                    :score 0
+                    :state :playing}))
+
+(defn reset-game [event-chan]
+  (ev/give event-chan {:type :reset-game}))
+
+(defn handle-events [event-chan]
+  (when (and (j/key-pressed? :w)
+             (not= :down (snake :dir)))
+    (ev/give event-chan {:type :change-dir :dir :up}))
+  (when (and (j/key-pressed? :d)
+             (not= :left (snake :dir)))
+    (ev/give event-chan {:type :change-dir :dir :right}))
+  (when (and (j/key-pressed? :a)
+             (not= :right (snake :dir)))
+    (ev/give event-chan {:type :change-dir :dir :left}))
+  (when (and (j/key-pressed? :s)
+             (not= :up (snake :dir)))
+    (ev/give event-chan {:type :change-dir :dir :down}))
+
+  (when (and
+	  (j/key-pressed? :p)
+	  (not= :game-over (game-state :state)))
+    (ev/give event-chan {:type :toggle-pause}))
+
+  (when (j/key-pressed? :space)
+    (reset-game event-chan)))
+
+(defn update-game [event-chan]
+  (set accumulated-time (+ accumulated-time (j/get-frame-time)))
+
+  (let [snake-speed (/ 1 (+ (get snake :speed) (/ (get game-state :score) 2)))]
+    (when (> accumulated-time snake-speed)
+      (set accumulated-time (- accumulated-time snake-speed))
+      (ev/give event-chan (tick-snake snake))
+      )))
+
+# --- Draw ---
 
 (defn draw-snake [snake]
   (each [x y] (get snake :tail)
@@ -84,46 +126,7 @@
                       (inc (* square-size y))
                       (dec square-size)
                       (dec square-size)
-                      [0.2 0.7 0.2]))) 
-
-(defn init-game []
-  (set snake @{:head [10 20]
-               :tail @[[10 21] [10 22] [11 22]]
-               :speed 2
-               :color :green
-               :dir :right})
-  (set game-state @{:paused? false
-                    :score 0
-                    :state :playing})
-  (randomize-apple))
-
-(defn handle-events []
-  (when (and (j/key-pressed? :w)
-             (not= :down (snake :dir)))
-    (put snake :dir :up))
-  (when (and (j/key-pressed? :d)
-             (not= :left (snake :dir)))
-    (put snake :dir :right))
-  (when (and (j/key-pressed? :a)
-             (not= :right (snake :dir)))
-    (put snake :dir :left))
-  (when (and (j/key-pressed? :s)
-             (not= :up (snake :dir)))
-    (put snake :dir :down))
-
-  (when (j/key-pressed? :p)
-    (update game-state :paused? not))
-
-  (when (j/key-pressed? :space)
-    (init-game)))
-
-(defn update-game []
-  (set accumulated-time (+ accumulated-time (j/get-frame-time)))
-
-  (let [snake-speed (/ 1 (+ (get snake :speed) (/ (get game-state :score) 2)))]
-    (when (> accumulated-time snake-speed)
-      (set accumulated-time (- accumulated-time snake-speed))
-      (tick-snake snake))))
+                      [0.2 0.7 0.2])))
 
 (defn draw-apple [apple]
   (let [[x y] apple
@@ -166,42 +169,74 @@
                (- screen-width 120)
                10 24 :green)
   (j/draw-fps 10 10)
-  (j/end-drawing))
+  (j/end-drawing)) 
 
-(def event-chan (ev/chan 100)) 
 
-(defn command-handler [command]
-  (xprintf stdout (string "Hello " command))) 
+(defn command-handler [event-chan command]
+  (match (command :type)
+    :respawn-apple (set apple [(math/floor (* (math/random) squares-h))
+			       (math/floor (* (math/random) squares-v))])
 
-(defn command-listener []
+    :change-dir (put snake :next-dir (command :dir))
+
+    :reset-game (do
+		  (init-game!)
+		  (randomize-apple event-chan))
+
+    :toggle-pause (update game-state :paused? not)
+
+    :move-snake (do
+		  (put snake :dir (get snake :next-dir))
+		  (array/insert (get snake :tail) 0 (get snake :head))
+		  (update snake :head (partial update-snake-head (get snake :dir)))
+		  (array/pop (get snake :tail)))
+
+    :snake-eat (do
+		  (put snake :dir (snake :next-dir))
+		  (array/insert (get snake :tail) 0 (get snake :head))
+		  (update snake :head (partial update-snake-head (get snake :dir)))
+		  (randomize-apple event-chan)
+		  (update game-state :score inc))
+
+    :game-over (do
+		 (put game-state :state :game-over)
+		 (ev/give event-chan {:type :move-snake})))) 
+
+(defn command-listener [event-chan]
   (forever
     (ev/sleep 0)
     (let [command (ev/take event-chan)]
-      (command-handler command)))) 
+      (setdyn :out stdout)
+      (pp command)
+      (command-handler event-chan command)))) 
 
-(defn game-loop []
+(defn game-loop [event-chan]
   (def commands @[])
-  (handle-events)
+  (handle-events event-chan)
   (when (and (not (game-state :paused?))
              (= :playing (get game-state :state)))
-    (update-game))
+    (update-game event-chan))
   (draw))
 
 (comment 
- (def handle-commands (ev/call command-listener)) 
- (ev/cancel handle-commands "Canceled") 
- (ev/give event-chan "Test3"))  
+ (def handle-commands (ev/call command-listener event-chan)) 
+ (ev/give event-channel {:type :snake-eat}))  
+
+(var event-channel nil)
+
 
 (defn main
   [& args]
+  (set event-channel (ev/chan 100)) 
   (def repl-server
     (netrepl/server "127.0.0.1" "9365" (fiber/getenv (fiber/current))))
+  (def handle-commands (ev/call command-listener event-channel))
   (j/init-window screen-width screen-height "Snake")
   (j/set-target-fps 60)
-  (init-game)
+  (reset-game event-channel)
   (while (not (j/window-should-close))
     (ev/sleep 0)
-    (game-loop))
+    (game-loop event-channel))
   (:close repl-server))
 
 
